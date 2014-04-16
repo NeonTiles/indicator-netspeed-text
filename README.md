@@ -1,8 +1,8 @@
-# Text based Netspeed Indicator
+# Unity Netspeed Text
 
 ![indicator](https://github.com/rojaro/unity-netspeed-text/raw/master/images/screenshot.png)
 
-A Ubuntu [indicator](http://unity.ubuntu.com/projects/appindicators/) to display the current netspeed.
+A basic Ubuntu [indicator](http://unity.ubuntu.com/projects/appindicators/) to display the current netspeed implemented in python.
 
 # Installation
 
