@@ -1,0 +1,88 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import appindicator
+import glob
+import gtk
+import os
+import sys
+import threading
+import time
+ 
+class UpdateThread(threading.Thread):
+    def __init__(self, parent):
+        threading.Thread.__init__(self)
+        self.parent = parent
+        self.forceExit = False
+        self.last_rx = 0
+        self.last_tx = 0
+        self.last_update = 0
+
+    def humanReadable(self, bytes):
+        kb = str(bytes >> 10)
+        if bytes > 1048576:
+            return "%s.%s M" % (kb[0:-3], kb[-3:-2])
+        return "%s K" % kb
+
+    def readBytes(self, filename):
+        with open(filename) as f:
+            return int(f.read().strip())
+
+    def run(self):
+        while(self.parent.alive.isSet()):
+            if self.forceExit:
+                return
+
+            now = int(time.time())
+            total_rx = 0
+            total_tx = 0
+
+            for item in glob.glob("/sys/class/net/*/device"):
+                path = item[:-7]
+                total_rx += self.readBytes("%s/statistics/rx_bytes" % path)
+                total_tx += self.readBytes("%s/statistics/tx_bytes" % path)
+
+            time_diff = now - self.last_update
+            rx_rate = self.humanReadable(total_rx - self.last_rx / time_diff)
+            tx_rate = self.humanReadable(total_tx - self.last_tx / time_diff)
+
+            self.parent.updateText("↓ %s ↑ %s" % (rx_rate, tx_rate))
+
+            self.last_rx = total_rx
+            self.last_tx = total_tx
+            self.last_update = now
+
+            time.sleep(1)
+
+class IndicatorNetspeed:
+    def __init__(self):
+        self.ind = appindicator.Indicator("indicator-netspeed-text", os.path.abspath("./images/icon.png"), appindicator.CATEGORY_SYSTEM_SERVICES)
+        self.ind.set_status(appindicator.STATUS_ACTIVE)
+        self.menu = gtk.Menu()
+        self.menu.show_all()
+        self.ind.set_menu(self.menu)
+        self.alive = threading.Event()
+        self.alive.set()
+        self.updateThread = UpdateThread(self)
+        self.updateThread.start()
+
+    def updateText(self, text):
+        self.ind.set_label(text)
+
+    def onExit(self, event=None):
+        self.updateThread.forceExit = True
+        self.alive.clear()
+        try: gtk.main_quit()
+        except RuntimeError: pass
+
+def main(args):
+    indicator = IndicatorNetspeed()
+    gtk.gdk.threads_init()
+    try:
+        gtk.main()
+    except KeyboardInterrupt:
+        indicator.onExit()
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
