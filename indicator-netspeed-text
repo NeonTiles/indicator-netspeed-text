@@ -8,6 +8,7 @@ import os
 import sys
 import threading
 import time
+
  
 class UpdateThread(threading.Thread):
     def __init__(self, parent):
@@ -56,7 +57,11 @@ class UpdateThread(threading.Thread):
 
 class IndicatorNetspeed:
     def __init__(self):
-        self.ind = appindicator.Indicator("indicator-netspeed-text", os.path.abspath("./images/icon.png"), appindicator.CATEGORY_SYSTEM_SERVICES)
+        self.ind = appindicator.Indicator(
+            "indicator-netspeed-text",
+            os.path.dirname(os.path.abspath(__file__)) + "/images/icon.png",
+            appindicator.CATEGORY_SYSTEM_SERVICES
+        )
         self.ind.set_status(appindicator.STATUS_ACTIVE)
         self.menu = gtk.Menu()
         self.menu.show_all()
