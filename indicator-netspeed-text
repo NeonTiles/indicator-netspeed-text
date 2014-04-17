@@ -5,6 +5,7 @@ import appindicator
 import glob
 import gtk
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -15,7 +16,6 @@ APP_NAME = "indicator-netspeed-text"
 class UpdateThread(threading.Thread):
     def __init__(self, parent):
         threading.Thread.__init__(self)
-
         self.forceExit = False
         self.last_rx = 0
         self.last_tx = 0
@@ -64,13 +64,39 @@ class IndicatorNetspeed:
     def __init__(self):
         self.ind = appindicator.Indicator(APP_NAME, APP_ICON, appindicator.CATEGORY_SYSTEM_SERVICES)
         self.ind.set_status(appindicator.STATUS_ACTIVE)
-        self.menu = gtk.Menu()
-        self.menu.show_all()
-        self.ind.set_menu(self.menu)
+        self.ind.set_menu(self.menuMake())
         self.alive = threading.Event()
         self.alive.set()
         self.updateThread = UpdateThread(self)
         self.updateThread.start()
+
+    def findBinary(self, appname):
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            filename = os.path.join(path, appname)
+            if os.path.isfile(filename) and os.access(filename, os.X_OK):
+                return filename
+        return None
+
+    def menuMake(self):
+        menu = gtk.Menu()
+        self.netactviewMenuItem(menu)
+        menu.show_all()
+        return menu
+
+    def netactviewMenuItem(self, menu):
+        self.netactviewBin = self.findBinary("netactview")
+        if self.netactviewBin != None:
+            netactview = gtk.MenuItem("Show network activity")
+            netactview.connect("activate", self.netactviewRun)
+        else:
+            netactview = gtk.MenuItem("netactview is not installed")
+            netactview.set_sensitive(False)
+        netactview.show()
+        menu.append(netactview)
+
+    def netactviewRun(self, widget):
+        subprocess.Popen(self.netactviewBin)
 
     def updateText(self, text):
         self.ind.set_label(text)
