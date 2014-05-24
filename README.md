@@ -4,7 +4,7 @@
 
 A basic text based Ubuntu [indicator](http://unity.ubuntu.com/projects/appindicators/) to display the current netspeed.
 
-If `netactview` is installed, it can be started from the indicator menu.
+If the [Net Activity Viewer](http://netactview.sourceforge.net/) (`netactview`) is installed, it can be started from the indicator menu.
 
 ## Requirements
 
