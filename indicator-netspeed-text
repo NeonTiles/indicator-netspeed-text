@@ -33,12 +33,11 @@ class UpdateThread(threading.Thread):
             return int(f.read().strip())
 
     def run(self):
-        devices = glob.glob("/sys/class/net/*/device")
-
         while(self.parent.alive.isSet()):
             if self.forceExit:
                 return
 
+            devices = glob.glob("/sys/class/net/*/device")
             now = int(time.time())
             total_rx = 0
             total_tx = 0
