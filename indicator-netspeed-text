@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import appindicator
+import dns.resolver
+import fcntl
 import glob
 import gtk
 import os
+import socket
 import subprocess
+import struct
 import sys
 import threading
 import time
@@ -14,31 +18,86 @@ APP_ICON = os.path.dirname(os.path.abspath(__file__)) + "/images/icon.png"
 APP_NAME = "indicator-netspeed-text"
 
 class UpdateThread(threading.Thread):
+
     def __init__(self, parent):
         threading.Thread.__init__(self)
+
+        self.dns_update_interval = 300
+
         self.forceExit = False
+
         self.last_rx = 0
         self.last_tx = 0
-        self.last_update = 0
+        self.last_speed_update = 0
+        self.last_dns_update = 0
+
         self.parent = parent
+
+        self.opendns = dns.resolver.Resolver()
+        self.opendns.nameservers = [
+            socket.gethostbyname("resolver1.opendns.com"),
+            socket.gethostbyname("resolver2.opendns.com")
+        ]
+
+        self.public_ip = ""
+        self.private_ip = ""
 
     def humanReadable(self, bytes):
         kb = str(bytes >> 10)
+
         if bytes > 1048576:
             return "%s.%s M" % (kb[0:-3], kb[-3:-2])
+
         return "%s K" % kb
 
     def readBytes(self, filename):
         with open(filename) as f:
             return int(f.read().strip())
 
+    def get_default_gateway_iface(self):
+        with open("/proc/net/route") as file:
+            for line in file.readlines():
+                try:
+                    iface, dest, _, flags, _, _, _, _, _, _, _, = line.strip().split()
+
+                    if dest != '00000000' or not int(flags, 16) & 2:
+                        continue
+
+                    return iface
+                except:
+                    continue
+
+    def get_ip_address(self, ifname):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', ifname[:15]))[20:24])
+        except:
+            pass
+
+    def get_opendns_myip(self):
+        try:
+            result = self.opendns.query('myip.opendns.com', 'A')
+            for value in result:
+                return value
+        except:
+            pass
+
     def run(self):
         while(self.parent.alive.isSet()):
+
             if self.forceExit:
                 return
 
-            devices = glob.glob("/sys/class/net/*/device")
+            default_gateway_iface = self.get_default_gateway_iface()
             now = int(time.time())
+
+            if default_gateway_iface == None:
+                self.parent.updateText("↓ 0 K ↑ 0 K / - / -")
+                self.last_dns_update = now - self.dns_update_interval
+                time.sleep(1)
+                continue
+
+            devices = glob.glob("/sys/class/net/%s/device" % default_gateway_iface)
             total_rx = 0
             total_tx = 0
 
@@ -47,72 +106,90 @@ class UpdateThread(threading.Thread):
                 total_rx += self.readBytes("%s/statistics/rx_bytes" % devicePath)
                 total_tx += self.readBytes("%s/statistics/tx_bytes" % devicePath)
 
-            time_diff = now - self.last_update
+            time_diff = now - self.last_speed_update
             rx_rate = self.humanReadable(total_rx - self.last_rx / time_diff)
             tx_rate = self.humanReadable(total_tx - self.last_tx / time_diff)
 
-            self.parent.updateText("↓ %s ↑ %s" % (rx_rate, tx_rate))
+            dns_time_diff = now - self.last_dns_update
+
+            if dns_time_diff > self.dns_update_interval:
+                self.public_ip = self.get_opendns_myip()
+                self.private_ip = self.get_ip_address(default_gateway_iface)
+                self.last_dns_update = now
+
+            self.parent.updateText("↓ %s ↑ %s / %s / %s" % (rx_rate, tx_rate, self.private_ip, self.public_ip))
 
             self.last_rx = total_rx
             self.last_tx = total_tx
-            self.last_update = now
+            self.last_speed_update = now
 
             time.sleep(1)
 
 class IndicatorNetspeed:
+
     def __init__(self):
-        self.ind = appindicator.Indicator(APP_NAME, APP_ICON, appindicator.CATEGORY_SYSTEM_SERVICES)
-        self.ind.set_status(appindicator.STATUS_ACTIVE)
-        self.ind.set_menu(self.menuMake())
+        self.indicator = appindicator.Indicator(APP_NAME, APP_ICON, appindicator.CATEGORY_SYSTEM_SERVICES)
+        self.indicator.set_status(appindicator.STATUS_ACTIVE)
+        self.indicator.set_menu(self.menuMake())
+
         self.alive = threading.Event()
         self.alive.set()
+
         self.updateThread = UpdateThread(self)
         self.updateThread.start()
 
-    def findBinary(self, appname):
+    def findExecutable(self, appname):
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
             filename = os.path.join(path, appname)
+
             if os.path.isfile(filename) and os.access(filename, os.X_OK):
                 return filename
+
         return None
 
     def menuMake(self):
         menu = gtk.Menu()
-        self.netactviewMenuItem(menu)
-        menu.show_all()
-        return menu
 
-    def netactviewMenuItem(self, menu):
-        self.netactviewBin = self.findBinary("netactview")
+        self.netactviewBin = self.findExecutable("netactview")
         if self.netactviewBin != None:
             netactview = gtk.MenuItem("Show network activity")
             netactview.connect("activate", self.netactviewRun)
         else:
             netactview = gtk.MenuItem("netactview is not installed")
             netactview.set_sensitive(False)
+
         netactview.show()
         menu.append(netactview)
+
+        menu.show_all()
+
+        return menu
 
     def netactviewRun(self, widget):
         subprocess.Popen(self.netactviewBin)
 
     def updateText(self, text):
-        self.ind.set_label(text)
+        self.indicator.set_label(text)
 
     def onExit(self, event=None):
         self.updateThread.forceExit = True
         self.alive.clear()
-        try: gtk.main_quit()
-        except RuntimeError: pass
+
+        try:
+            gtk.main_quit()
+        except RuntimeError:
+            pass
 
 def main(args):
     indicator = IndicatorNetspeed()
     gtk.gdk.threads_init()
+
     try:
         gtk.main()
     except KeyboardInterrupt:
         indicator.onExit()
+
     return 0
 
 if __name__ == "__main__":
