@@ -82,6 +82,12 @@ class UpdateThread(threading.Thread):
         except:
             pass
 
+    def calc_rate(self, total, last, time):
+        tmp = total - last
+        if tmp > 0:
+            return self.humanReadable(tmp / time)
+        return 0
+
     def run(self):
         while(self.parent.alive.isSet()):
 
@@ -107,8 +113,8 @@ class UpdateThread(threading.Thread):
                 total_tx += self.readBytes("%s/statistics/tx_bytes" % devicePath)
 
             time_diff = now - self.last_speed_update
-            rx_rate = self.humanReadable(total_rx - self.last_rx / time_diff)
-            tx_rate = self.humanReadable(total_tx - self.last_tx / time_diff)
+            rx_rate = self.calc_rate(total_rx, self.last_rx, time_diff)
+            tx_rate = self.calc_rate(total_tx, self.last_tx, time_diff)
 
             dns_time_diff = now - self.last_dns_update
 
