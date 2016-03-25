@@ -33,12 +33,6 @@ class UpdateThread(threading.Thread):
 
         self.parent = parent
 
-        self.opendns = dns.resolver.Resolver()
-        self.opendns.nameservers = [
-            socket.gethostbyname("resolver1.opendns.com"),
-            socket.gethostbyname("resolver2.opendns.com")
-        ]
-
         self.public_ip = ""
         self.private_ip = ""
 
@@ -76,6 +70,12 @@ class UpdateThread(threading.Thread):
 
     def get_opendns_myip(self):
         try:
+            self.opendns = dns.resolver.Resolver()
+            self.opendns.nameservers = [
+                socket.gethostbyname("resolver1.opendns.com"),
+                socket.gethostbyname("resolver2.opendns.com")
+            ]
+
             result = self.opendns.query('myip.opendns.com', 'A')
             for value in result:
                 return value
