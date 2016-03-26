@@ -14,9 +14,6 @@ import sys
 import threading
 import time
 
-APP_ICON = os.path.dirname(os.path.abspath(__file__)) + "/images/icon.png"
-APP_NAME = "indicator-netspeed-text"
-
 class UpdateThread(threading.Thread):
 
     def __init__(self, parent):
@@ -134,7 +131,18 @@ class UpdateThread(threading.Thread):
 class IndicatorNetspeed:
 
     def __init__(self):
-        self.indicator = appindicator.Indicator(APP_NAME, APP_ICON, appindicator.CATEGORY_SYSTEM_SERVICES)
+        binpath = os.path.abspath(__file__)
+
+        if os.path.islink(binpath):
+            binpath = os.readlink(binpath)
+
+        print(binpath)
+
+        self.indicator = appindicator.Indicator(
+            "indicator-netspeed-text",
+            os.path.dirname(binpath) + "/images/icon.png",
+            appindicator.CATEGORY_SYSTEM_SERVICES
+        )
         self.indicator.set_status(appindicator.STATUS_ACTIVE)
         self.indicator.set_menu(self.menuMake())
 
