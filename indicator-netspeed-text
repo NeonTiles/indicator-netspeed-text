@@ -136,8 +136,6 @@ class IndicatorNetspeed:
         if os.path.islink(binpath):
             binpath = os.readlink(binpath)
 
-        print(binpath)
-
         self.indicator = appindicator.Indicator(
             "indicator-netspeed-text",
             os.path.dirname(binpath) + "/images/icon.png",
