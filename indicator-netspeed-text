@@ -83,7 +83,7 @@ class UpdateThread(threading.Thread):
         tmp = total - last
         if tmp > 0:
             return self.humanReadable(tmp / time)
-        return 0
+        return "0 K"
 
     def run(self):
         while(self.parent.alive.isSet()):
